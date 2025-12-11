@@ -1,7 +1,12 @@
 from django.urls import path
 
-from .views import TopDistrictsAPIView
+from .views import TopDistrictsAPIView, TravelRecommendationAPIView
 
 urlpatterns = [
     path("top-districts", TopDistrictsAPIView.as_view(), name="top-districts"),
+    path(
+        "travel-recommendation",
+        TravelRecommendationAPIView.as_view(),
+        name="travel-recommendation",
+    ),
 ]

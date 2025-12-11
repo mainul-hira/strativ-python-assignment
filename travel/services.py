@@ -2,6 +2,7 @@ import logging
 import requests
 from statistics import fmean
 from typing import Any
+from datetime import date
 
 from django.db import transaction
 from django.utils import timezone
@@ -99,24 +100,24 @@ class OpenMeteoClient:
 
         return self._get(self.AIR_QUALITY_URL, params)
 
-    def get_weather_single_day(self, lat: float, lon: float, date: str):
+    def get_weather_single_day(self, lat: str, lon: str, travel_date: str):
         params = {
             "latitude": lat,
             "longitude": lon,
             "hourly": "temperature_2m",
-            "start_date": date,
-            "end_date": date,
+            "start_hour": travel_date,
+            "end_hour": travel_date,
             "timezone": "Asia/Dhaka",
         }
         return self._get(self.WEATHER_URL, params)
 
-    def get_air_quality_single_day(self, lat: float, lon: float, date: str):
+    def get_air_quality_single_day(self, lat: str, lon: str, travel_date: str):
         params = {
             "latitude": lat,
             "longitude": lon,
             "hourly": "pm2_5",
-            "start_date": date,
-            "end_date": date,
+            "start_hour": travel_date,
+            "end_hour": travel_date,
             "timezone": "Asia/Dhaka",
         }
         return self._get(self.AIR_QUALITY_URL, params)
@@ -130,6 +131,7 @@ class DistrictMetricsService:
         * average temperature at 14:00 (2 PM) over 7 days
         * average PM2.5 at 14:00 over 7 days
     - Upserting rows into DistrictMetrics
+    - Return top 10 districts with lowest average temperature and lowest average PM2.5 used in top districts API
     """
 
     def __init__(self, client: OpenMeteoClient | None = None) -> None:
@@ -270,3 +272,100 @@ class DistrictMetricsService:
             )
 
         return top_districts
+
+
+class TravelRecommendationService:
+    """
+    Service responsible for:
+    - Call Open-Meteo for current location and destination for a specific date and time (14:00, 2pm local time).
+    - Read temperature & PM2.5.
+    - Decide "Recommended" or "Not Recommended" based on temperature and air quality metrics.
+    """
+
+    def __init__(self, client: OpenMeteoClient | None = None) -> None:
+        self.client = client or OpenMeteoClient()
+
+    def get_recommendation(
+        self,
+        current_lat: float,
+        current_lon: float,
+        destination: District,
+        travel_date: date,
+    ) -> dict[str, Any]:
+        """
+        Build a recommendation dict based on:
+          - current location (lat/lon)
+          - destination district
+          - travel date (within 5-day horizon)
+
+        """
+        travel_date_str = f"{travel_date.isoformat()}T14:00"
+
+        combined_lats = f"{current_lat},{destination.latitude}"
+        combined_lons = f"{current_lon},{destination.longitude}"
+
+        combined_weather = self.client.get_weather_single_day(
+            combined_lats, combined_lons, travel_date_str
+        )
+        combined_air = self.client.get_air_quality_single_day(
+            combined_lats, combined_lons, travel_date_str
+        )
+
+        if len(combined_weather) != 2 or len(combined_air) != 2:
+            raise OpenMeteoError("Failed to fetch weather/air-quality data.")
+
+        current_temp = combined_weather[0].get("hourly").get("temperature_2m")[0]
+        current_pm = combined_air[0].get("hourly").get("pm2_5")[0]
+        dest_temp = combined_weather[1].get("hourly").get("temperature_2m")[0]
+        dest_pm = combined_air[1].get("hourly").get("pm2_5")[0]
+
+        if None in (current_temp, current_pm, dest_temp, dest_pm):
+            raise OpenMeteoError("Missing 2 PM data for temperature or PM2.5.")
+
+        # Differences (destination - current)
+        temp_diff = round(dest_temp - current_temp, 1)
+        pm_diff = round(dest_pm - current_pm, 1)
+
+        # Decision rule: Recommended only if destination is cooler AND cleaner
+        if dest_temp < current_temp and dest_pm < current_pm:
+            status = "Recommended"
+            reason = (
+                f"Your destination ({destination.name}) is {abs(temp_diff):.1f}°C cooler "
+                f"and has significantly better air quality than your current location. "
+                f"Enjoy your trip!"
+            )
+        else:
+            if temp_diff > 0 and pm_diff > 0:
+                reason = (
+                    f"Your destination ({destination.name}) is hotter and has worse air quality than your current location. "
+                    f"It's better to stay where you are."
+                )
+
+            elif temp_diff > 0:
+                reason = (
+                    f"Your destination ({destination.name}) is hotter than your current location. "
+                    f"It's better to stay where you are."
+                )
+
+            elif pm_diff > 0:
+                reason = (
+                    f"Your destination ({destination.name}) has worse air quality than your current location. "
+                    f"It's better to stay where you are."
+                )
+
+            status = "Not Recommended"
+
+        return {
+            "status": status,
+            "reason": reason,
+            "travel_date": travel_date,
+            "current": {
+                "temperature_2pm": current_temp,
+                "pm25_2pm": current_pm,
+            },
+            "destination": {
+                "district": destination.name,
+                "temperature_2pm": dest_temp,
+                "pm25_2pm": dest_pm,
+            },
+        }
