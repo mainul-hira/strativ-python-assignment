@@ -7,6 +7,7 @@ from travel.services import (
     DistrictMetricsService,
     TravelRecommendationService,
     OpenMeteoError,
+    DistrictService,
 )
 from travel.api.serializers import TravelRecommendationRequestSerializer
 from rest_framework import status
@@ -70,3 +71,14 @@ class TravelRecommendationAPIView(APIView):
             )
 
         return Response(result, status=status.HTTP_200_OK)
+
+
+class DistrictAPIView(APIView):
+    """
+    GET /api/v1/districts
+    """
+
+    def get(self, request, *args, **kwargs):
+        district_service = DistrictService()
+        districts = district_service.get_districts()
+        return Response(districts, status=status.HTTP_200_OK)

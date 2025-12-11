@@ -369,3 +369,8 @@ class TravelRecommendationService:
                 "pm25_2pm": dest_pm,
             },
         }
+
+
+class DistrictService:
+    def get_districts(self) -> list[District]:
+        return list(District.objects.values("id", "name", "latitude", "longitude"))
