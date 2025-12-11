@@ -21,8 +21,8 @@ class OpenMeteoClient:
     Provides only 4 API calls:
       - 7-day weather forecast (hourly)
       - 7-day air quality (hourly)
-      - Single-day weather (hourly)
-      - Single-day air quality (hourly)
+      - Single-day weather (specific time, e.g. 14:00)
+      - Single-day air quality (specific time, e.g. 14:00)
     """
 
     WEATHER_URL = "https://api.open-meteo.com/v1/forecast"
@@ -192,12 +192,14 @@ class DistrictMetricsService:
             logger.error(f"Failed to fetch data from Open-Meteo: {exc}")
             raise OpenMeteoError("Failed to fetch data from Open-Meteo")
 
-        if len(weather_locations) != len(districts) or len(air_locations) != len(
-            districts
+        total_districts = len(districts)
+        if (
+            len(weather_locations) != total_districts
+            or len(air_locations) != total_districts
         ):
             logger.error(
                 f"Mismatch between number of districts and Open-Meteo locations: "
-                f"districts={len(districts)}, weather_locations={len(weather_locations)}, air_locations={len(air_locations)}"
+                f"districts={total_districts}, weather_locations={len(weather_locations)}, air_locations={len(air_locations)}"
             )
             raise OpenMeteoError(
                 "Location count mismatch between districts and Open-Meteo response"
@@ -244,7 +246,8 @@ class DistrictMetricsService:
         )
         return created_count, updated_count
 
-    def get_top_10_districts(self) -> list[dict[str, Any]]:
+    @staticmethod
+    def get_top_10_districts() -> list[dict[str, Any]]:
         """
         Return top 10 best districts based on temperature and air quality as a list of dicts, ordered by:
           1) avg_temp_2pm_7day ASC (cooler first)
@@ -335,6 +338,8 @@ class TravelRecommendationService:
                 f"Enjoy your trip!"
             )
         else:
+            status = "Not Recommended"
+            reason = ""
             if temp_diff > 0 and pm_diff > 0:
                 reason = (
                     f"Your destination ({destination.name}) is hotter and has worse air quality than your current location. "
@@ -353,8 +358,6 @@ class TravelRecommendationService:
                     f"It's better to stay where you are."
                 )
 
-            status = "Not Recommended"
-
         return {
             "status": status,
             "reason": reason,
@@ -372,5 +375,5 @@ class TravelRecommendationService:
 
 
 class DistrictService:
-    def get_districts(self) -> list[District]:
+    def get_districts(self) -> list[dict[str, Any]]:
         return list(District.objects.values("id", "name", "latitude", "longitude"))

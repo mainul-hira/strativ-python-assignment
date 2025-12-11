@@ -1,3 +1,5 @@
+import logging
+
 from django.contrib.auth import get_user_model
 from rest_framework import status
 from rest_framework.views import APIView
@@ -8,6 +10,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from users.api.serializers import RegisterSerializer, LogoutSerializer
 
 User = get_user_model()
+logger = logging.getLogger("general")
 
 
 class RegisterView(APIView):
@@ -36,7 +39,8 @@ class LogoutView(APIView):
         refresh_token = serializer.validated_data["refresh"]
         try:
             RefreshToken(refresh_token).blacklist()
-        except Exception:
+        except Exception as exc:
+            logger.error(f"Failed to blacklist refresh token: {exc}")
             return Response(
                 {"detail": "Invalid token"}, status=status.HTTP_400_BAD_REQUEST
             )
