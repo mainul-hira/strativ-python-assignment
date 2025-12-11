@@ -4,7 +4,9 @@ A Django REST API that helps users find the best districts in Bangladesh for tra
 
 ## Features
 
+- **JWT Authentication**: Secure user registration, login, and token-based authentication
 - **Top 10 Districts**: Get the coolest and cleanest districts in Bangladesh based on 7-day average temperature and PM2.5 levels
+- **District List**: Get all districts with their coordinates for easy reference
 - **Travel Recommendations**: Compare your current location with a destination district to get personalized travel advice
 - **Real-time Data**: Weather forecasts and air quality data updated periodically from Open-Meteo API
 - **Fast Response**: Optimized for sub-500ms response times with database caching
@@ -14,6 +16,7 @@ A Django REST API that helps users find the best districts in Bangladesh for tra
 - **Python**: 3.13
 - **Django**: 5.2.9
 - **Django REST Framework**: 3.16.1
+- **JWT Authentication**: djangorestframework-simplejwt 5.5.1
 - **PostgreSQL**: Database for storing district data and metrics
 - **Open-Meteo API**: External API for weather and air quality data
 
@@ -51,6 +54,7 @@ pip install -r requirements.txt
 The `requirements.txt` includes:
 - Django==5.2.9
 - djangorestframework==3.16.1
+- djangorestframework-simplejwt==5.5.1
 - django-cors-headers==4.9.0
 - django-environ==0.12.0
 - psycopg==3.3.2
@@ -142,9 +146,155 @@ The API will be available at `http://127.0.0.1:8000/`
 
 ## API Endpoints
 
-### 1. Top 10 Districts
+### Authentication Endpoints
 
-**Endpoint**: `GET /api/top-districts`
+#### 1. Register
+
+**Endpoint**: `POST /api/v1/auth/register`
+
+**Authentication**: Not required
+
+Create a new user account.
+
+**Request Body**:
+
+```json
+{
+  "username": "mainul_hira",
+  "password": "SecurePass123!",
+  "confirm_password": "SecurePass123!"
+}
+```
+
+**Response Example**:
+
+```json
+{
+  "id": 1,
+  "username": "mainul_hira"
+}
+```
+
+#### 2. Login
+
+**Endpoint**: `POST /api/v1/auth/login`
+
+**Authentication**: Not required
+
+Obtain JWT access and refresh tokens.
+
+**Request Body**:
+
+```json
+{
+  "username": "mainul_hira",
+  "password": "SecurePass123!"
+}
+```
+
+**Response Example**:
+
+```json
+{
+  "access": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "refresh": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+}
+```
+
+**Token Lifetimes**:
+- Access Token: 30 minutes
+- Refresh Token: 7 days
+
+#### 3. Token Refresh
+
+**Endpoint**: `POST /api/v1/auth/token-refresh`
+
+**Authentication**: Not required
+
+Refresh an expired access token using a valid refresh token.
+
+**Request Body**:
+
+```json
+{
+  "refresh": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+}
+```
+
+**Response Example**:
+
+```json
+{
+  "access": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "refresh": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+}
+```
+
+#### 4. Logout
+
+**Endpoint**: `POST /api/v1/auth/logout`
+
+**Authentication**: Required (Bearer Token)
+
+Blacklist the refresh token to prevent further use.
+
+**Request Headers**:
+```
+Authorization: Bearer <access_token>
+```
+
+**Request Body**:
+
+```json
+{
+  "refresh": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+}
+```
+
+**Response**: `204 No Content`
+
+---
+
+### Travel & Weather Endpoints
+
+**Note**: All endpoints below require authentication. Include the JWT access token in the Authorization header:
+```
+Authorization: Bearer <access_token>
+```
+
+#### 5. District List
+
+**Endpoint**: `GET /api/v1/districts`
+
+**Authentication**: Required
+
+Get a list of all 64 districts in Bangladesh with their coordinates.
+
+**Response Example**:
+
+```json
+[
+  {
+    "id": 1,
+    "name": "Dhaka",
+    "latitude": 23.8103,
+    "longitude": 90.4125
+  },
+  {
+    "id": 2,
+    "name": "Chittagong",
+    "latitude": 22.3569,
+    "longitude": 91.7832
+  }
+  // ... 62 more districts
+]
+```
+
+#### 6. Top 10 Districts
+
+**Endpoint**: `GET /api/v1/top-districts`
+
+**Authentication**: Required
 
 Returns the top 10 best districts for travel based on coolest temperature and best air quality.
 
@@ -176,9 +326,11 @@ Returns the top 10 best districts for travel based on coolest temperature and be
 - Primary sort: Average temperature at 2 PM (ascending - cooler first)
 - Secondary sort: Average PM2.5 levels (ascending - cleaner air first if same temperature)
 
-### 2. Travel Recommendation
+#### 7. Travel Recommendation
 
-**Endpoint**: `POST /api/travel-recommendation`
+**Endpoint**: `POST /api/v1/travel-recommendation`
+
+**Authentication**: Required
 
 Compare your current location with a destination district and get a travel recommendation.
 
@@ -247,7 +399,7 @@ Compare your current location with a destination district and get a travel recom
 strativ-python-assignment/
 ├── data/
 │   └── bd-districts.json          # Bangladesh district data
-├── travel/                         # Main Django app
+├── travel/                         # Travel & weather app
 │   ├── api/
 │   │   ├── serializers.py         # Request/response serializers
 │   │   ├── urls.py                # API URL routing
@@ -258,9 +410,14 @@ strativ-python-assignment/
 │   │       └── update_district_metrics.py  # Update weather metrics
 │   ├── models.py                  # District and DistrictMetrics models
 │   └── services.py                # Business logic and Open-Meteo client
+├── users/                          # Authentication app
+│   └── api/
+│       ├── serializers.py         # User auth serializers
+│       ├── urls.py                # Auth URL routing
+│       └── views.py               # Auth view classes
 ├── travel_weather/                # Django project settings
-│   ├── settings.py
-│   └── urls.py
+│   ├── settings.py                # Project settings with JWT config
+│   └── urls.py                    # Root URL configuration
 ├── .env.example                   # Environment variables template
 ├── requirements.txt               # Python dependencies
 └── manage.py                      # Django management script
