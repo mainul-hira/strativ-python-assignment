@@ -144,6 +144,42 @@ python manage.py runserver
 
 The API will be available at `http://127.0.0.1:8000/`
 
+## Testing the API with Postman
+
+A Postman collection is included in the `postman/` directory for easy API testing.
+
+### Import Collection
+
+1. Open Postman
+2. Click **Import** button
+3. Import both files from the `postman/` directory:
+   - `BD Weather Travel.postman_collection.json` - API endpoints collection
+   - `BD Weather Travel Env.postman_environment.json` - Environment variables
+
+### Using the Collection
+
+The collection includes all API endpoints organized by category:
+
+**Authentication**
+- Register - Create a new user account
+- Login - Obtain JWT tokens
+- Token Refresh - Refresh expired access token
+- Logout - Blacklist refresh token
+
+**Travel & Weather**
+- Get Districts - List all 64 districts with coordinates
+- Get Top 10 Districts - Best districts for travel
+- Travel Recommendation - Get personalized travel advice
+
+### Environment Variables
+
+The environment file includes:
+- `base_url` - API base URL (default: `http://127.0.0.1:8000`)
+- `access_token` - Automatically set after login
+- `refresh_token` - Automatically set after login
+
+**Note**: After running the **Login** request, the access token will be automatically saved to the environment and used for subsequent authenticated requests.
+
 ## API Endpoints
 
 ### Authentication Endpoints
@@ -488,9 +524,86 @@ If needed, this same command can later be run on a cron schedule without code ch
 	
 
 
+## Testing
+
+### Unit Tests
+
+The project includes unit tests for the service layer, focusing on business logic and external API interactions.
+
+#### Running Tests
+
+```bash
+# Run all tests
+python manage.py test
+
+# Run specific test module
+python manage.py test travel.tests
+
+# Run with verbose output
+python manage.py test --verbosity=2
+```
+
+#### Test Coverage
+
+**DistrictMetricsService** (5 tests):
+- `test_refresh_all_metrics_creates_metrics` - Verify metrics creation for districts
+- `test_refresh_all_metrics_updates_existing_metrics` - Test update logic on subsequent runs
+- `test_refresh_all_metrics_handles_errors` - Error handling for API failures
+- `test_get_top_10_districts` - Ranking algorithm validation
+- `test_refresh_with_no_districts` - Edge case: empty database
+
+**TravelRecommendationService** (4 tests):
+- `test_recommendation_cooler_and_cleaner` - Recommended scenario (both conditions met)
+- `test_recommendation_hotter_and_worse_air` - Not recommended (both conditions fail)
+- `test_recommendation_hotter_only` - Not recommended (temperature condition fails)
+- `test_recommendation_includes_all_data` - Response structure validation
+- `test_recommendation_with_missing_data` - Error handling for incomplete API data
+
+### Testing Strategy
+
+#### Why Unit Tests Only?
+
+For this assignment, I focused on unit tests for the service layer, which contains the core business logic. The views are intentionally thin and delegate work to services, so testing the services provides meaningful coverage without extra complexity.
+
+**Key Reasons:**
+
+**1. Core Logic Lives in Services**
+- Ranking, averaging, filtering, and recommendation decisions all happen in the service layer
+- Verifying these ensures the application behaves correctly
+
+**2. No External API Calls in Tests**
+- The application depends on Open-Meteo, so unit tests use simple fake clients to simulate API responses
+- This makes tests fast, deterministic, and decoupled from network availability
+
+**3. Simplicity (Aligned With Assignment)**
+- The instructions emphasize "super simple approaches"
+- Lightweight service tests fit this guidance and provide strong confidence with minimal overhead
+
+#### What's Not Tested (and Why)
+
+- **API Views**: Thin wrappers; service tests cover their logic
+- **Models**: No custom behavior
+- **Serializers**: Basic validation without custom logic
+- **Management Commands**: Small wrappers around service methods
+
+#### Testing Approach
+
+**Fake Clients Instead of Mocks**
+- Simple, readable, and close to real response structures
+
+**Focus on Business Rules**
+- Temperature & PM2.5 comparison
+- Ranking logic
+- Missing or invalid external data
+
+**Edge Cases Covered**
+- Empty database
+- Update vs. create logic
+
+
+
 ## Data Sources
 
 - **District Data**: [Bangladesh Districts JSON](https://raw.githubusercontent.com/strativ-dev/technical-screening-test/main/bd-districts.json)
 - **Weather Data**: [Open-Meteo Weather API](https://open-meteo.com/en/docs)
 - **Air Quality Data**: [Open-Meteo Air Quality API](https://open-meteo.com/en/docs/air-quality-api)
-
