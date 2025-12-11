@@ -241,3 +241,32 @@ class DistrictMetricsService:
             f"Refreshed metrics for {len(districts)} districts: created {created_count}, updated {updated_count}"
         )
         return created_count, updated_count
+
+    def get_top_10_districts(self) -> list[dict[str, Any]]:
+        """
+        Return top 10 best districts based on temperature and air quality as a list of dicts, ordered by:
+          1) avg_temp_2pm_7day ASC (cooler first)
+          2) avg_pm25_7day ASC (cleaner first if temps are the same)
+        """
+
+        qs = DistrictMetrics.objects.select_related("district").order_by(
+            "avg_temp_2pm_7day", "avg_pm25_7day"
+        )[:10]
+
+        top_districts: list[dict[str, Any]] = []
+
+        for idx, metrics_obj in enumerate(qs, start=1):
+            top_districts.append(
+                {
+                    "rank": idx,
+                    "district_id": metrics_obj.district.id,
+                    "district_name": metrics_obj.district.name,
+                    "avg_temp_2pm_7day": metrics_obj.avg_temp_2pm_7day,
+                    "avg_pm25_7day": metrics_obj.avg_pm25_7day,
+                    "last_updated": metrics_obj.last_updated.isoformat()
+                    if metrics_obj.last_updated
+                    else None,
+                }
+            )
+
+        return top_districts
